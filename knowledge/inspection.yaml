@@ -1,0 +1,99 @@
+schema: "1.0"
+meta:
+  name: "AWS RDS 巡检"
+  product: rds-aws
+
+inputs:
+  - name: db_instance_id
+    description: "AWS RDS DB instance identifier"
+    required: true
+  - name: range
+    description: "时间窗口"
+    default: "2h"
+
+collect:
+  tool: metrics-batch
+  command: "metrics-batch {db_instance_id} --preset health --range {range} --compare 1d --json"
+
+checks:
+  - id: cpu_utilization
+    name: "CPU 使用率"
+    metric: CPUUtilization
+    healthy: "P95 < 70%"
+    warn: "P95 70-85% 或日环比 +30%"
+    critical: "P95 > 85%"
+    on_critical_hint: "查 PI top SQL,确认是否有突增的高 cost 查询(pi-query <db-id> --top-sql)"
+
+  - id: database_connections
+    name: "数据库连接数"
+    metric: DatabaseConnections
+    healthy: "max < max_connections * 70%"
+    warn: "max > max_connections * 70%"
+    critical: "max > max_connections * 90%"
+    on_critical_hint: "看是哪个用户/应用连接突增(pi-query <db-id> --slice-by user);考虑 RDS Proxy 复用连接"
+
+  - id: freeable_memory
+    name: "可用内存"
+    metric: FreeableMemory
+    healthy: "min > 总内存 * 25%"
+    warn: "min < 总内存 * 25%"
+    critical: "min < 总内存 * 10% 或持续低位震荡"
+    on_critical_hint: "看 PI top wait events 是否有 IO/Buffer pool 等;检查 innodb_buffer_pool_size"
+
+  - id: free_storage_space
+    name: "可用磁盘空间"
+    metric: FreeStorageSpace
+    healthy: "min > 总容量 * 30%"
+    warn: "min < 总容量 * 30%"
+    critical: "min < 总容量 * 15% 或日下降率 > 10%"
+    on_critical_hint: "看 binlog 保留期、慢日志/审计日志大小、ibd 文件增长;考虑扩容或开启 storage autoscaling"
+
+  - id: io_throughput
+    name: "IOPS(读+写)"
+    metric: ReadIOPS+WriteIOPS
+    healthy: "P95 < 配额 * 70%"
+    warn: "P95 70-90% 或周期性打满"
+    critical: "P95 > 90% 配额"
+    on_critical_hint: "卷类型(gp2/gp3/io1)是否匹配 workload;PI top SQL 看是否有大量 table scan"
+
+  - id: io_latency
+    name: "IO 延迟(读+写)"
+    metric: ReadLatency+WriteLatency
+    healthy: "P95 < 5ms"
+    warn: "P95 5-15ms"
+    critical: "P95 > 15ms 或持续上升"
+    on_critical_hint: "看 IOPS 是否打满;gp2 卷 BurstBalance 用尽?考虑升级到 gp3 / io2;写延迟单独高 → 看 sync_binlog / innodb_flush_log_at_trx_commit"
+    note: "gp3/io2 期望 < 5ms;30ms 量级实际已是事故,旧阈值偏松"
+
+  - id: network_throughput
+    name: "网络吞吐(收+发)"
+    metric: NetworkReceiveThroughput+NetworkTransmitThroughput
+    healthy: "未达到实例规格上限"
+    warn: "周期接近规格上限"
+    critical: "持续打满规格上限"
+    on_critical_hint: "看是否有大事务/大结果集;考虑实例规格升配或拆库"
+
+  - id: replica_lag
+    name: "只读副本延迟"
+    metric: ReplicaLag
+    healthy: "< 5s"
+    warn: "5-30s 或上升趋势"
+    critical: "> 30s 或持续增长"
+    on_critical_hint: "看主库写入压力(WriteIOPS / 长事务 / 大表 DDL);副本规格/存储是否对称;有读后写一致性需求时 5s 以上即按 critical 处置"
+
+  - id: cpu_credit_balance
+    name: "CPU credit 余额(burstable 实例)"
+    metric: CPUCreditBalance
+    applies_to: "db.t* 系列(burstable)"
+    healthy: "> 30 持续稳定"
+    warn: "持续下降 或 < 30"
+    critical: "< 5 或 CPUSurplusCreditsCharged > 0"
+    on_critical_hint: "burstable 实例 CPU credit 耗尽是 t3/t4g 半夜爆炸的标准死法 — 必要时改非 burstable 规格(m/r 系列);CPUSurplusCreditsCharged 表示已在按 unlimited 模式付费用 burst"
+
+  - id: swap_usage
+    name: "Swap 使用量"
+    metric: SwapUsage
+    healthy: "= 0 或 极低"
+    warn: "> 0 持续 或 缓慢增长"
+    critical: "持续 > 0 且增长"
+    on_critical_hint: "MySQL 走 swap 几乎都是配置问题(buffer_pool 设大于实例可用内存、连接数+per-thread buffer 总和过大);看 innodb_buffer_pool_size 是否 > DBInstanceClassMemory*0.75、max_connections × per-thread-buffer 总量"

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local config / state
+.env
+*.local
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Test artifacts
+tests/output/

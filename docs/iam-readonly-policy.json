@@ -1,0 +1,55 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "RDSReadOnly",
+            "Effect": "Allow",
+            "Action": [
+                "rds:Describe*",
+                "rds:ListTagsForResource"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "CloudWatchMetricsRead",
+            "Effect": "Allow",
+            "Action": [
+                "cloudwatch:GetMetricStatistics",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:ListMetrics",
+                "cloudwatch:DescribeAlarms"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "CloudWatchLogsReadForSlowQuery",
+            "Effect": "Allow",
+            "Action": [
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams",
+                "logs:FilterLogEvents",
+                "logs:GetLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:log-group:/aws/rds/instance/*:*"
+        },
+        {
+            "Sid": "PerformanceInsightsRead",
+            "Effect": "Allow",
+            "Action": [
+                "pi:GetResourceMetrics",
+                "pi:DescribeDimensionKeys",
+                "pi:GetDimensionKeyDetails",
+                "pi:ListAvailableResourceMetrics"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "STSCallerIdentity",
+            "Effect": "Allow",
+            "Action": [
+                "sts:GetCallerIdentity"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
