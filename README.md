@@ -1,5 +1,7 @@
 # aws-rds-mysql-copilot
 
+中文 | [English](README.en.md)
+
 AWS RDS for MySQL 智能诊断与巡检 — 给 AI agent(Claude Code / Cursor / Cline / 任何支持 [Agent Skill](https://github.com/anthropics/skills) 协议的客户端)用的领域知识库 + 工具集。
 
 提供三种工作模式:**问答 / 诊断 / 巡检**(详见 [SKILL.md](SKILL.md))。
